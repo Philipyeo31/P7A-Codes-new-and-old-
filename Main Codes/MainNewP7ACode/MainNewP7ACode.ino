@@ -10,14 +10,22 @@
 #include <avr/wdt.h>
 
 
+
 /* AVR series mainboard */
 #define TFT_DC  49
 #define TFT_CS  53
 #define TFT_RST 48
 
+//User Definable parameters
+const long int incubationTime = 1800000; //in milliSeconds
+const long int airSamplingTime = 7200000;
+
+
+
 //Declaration and Flags
 unsigned short int functionSelect = 0;
 unsigned short int page = 0;
+
 
 
 bool v1Toggle = false;
@@ -32,21 +40,25 @@ bool v9Toggle = false;
 bool v10Toggle = false;
 bool v11Toggle = false;
 
-const uint8_t valve1 = 40;
-const uint8_t valve2 = 39;
-const uint8_t valve3 = 38;
-const uint8_t valve4 = 37;
-const uint8_t valve5 = 36;
-const uint8_t valve6 = 35;
-const uint8_t valve7 = 34;
-const uint8_t valve8 = 33;
-const uint8_t valve9 = 32;
-const uint8_t valve10 = 31;
-const uint8_t valve11 = 30;
+bool pmtToggle = false;
+bool ledToggle = false;
 
-const uint8_t LED = 9;
-const uint8_t AirPump = 5;
-const uint8_t PMT = 4;
+const uint8_t valve1 = 41;
+const uint8_t valve2 = 40;
+const uint8_t valve3 = 39;
+const uint8_t valve4 = 38;
+const uint8_t valve5 = 37;
+const uint8_t valve6 = 36;
+const uint8_t valve7 = 35;
+const uint8_t valve8 = 34;
+const uint8_t valve9 = 33;
+const uint8_t valve10 = 32;
+const uint8_t valve11 = 31;
+
+
+const uint8_t LED = 24;
+const uint8_t AirPump = 22;
+const uint8_t PMT = 23;
 
 bool pump1Dir = false;
 bool pump2Dir = false;
@@ -58,8 +70,10 @@ bool drawnTextFlag = false;
 bool drawnSetupFlag = false;
 bool drawnButtonFlag = false;
 bool runFlag = true;
+bool timerOnFlag = false;
 
-
+char pmtReadingArr[4] = {};
+uint16_t pmtReading = 0;
 
 
 DFRobot_Touch_GT911 touch;
@@ -78,21 +92,22 @@ void setup() {
   wdt_disable();
 
 
-  pinMode(EN, OUTPUT);
+ // pinMode(EN, OUTPUT);
   pinMode(LED, OUTPUT);
   pinMode(AirPump, OUTPUT);
   pinMode(PMT, OUTPUT);
-
+  pinMode(12, INPUT);
+  pinMode(A5,INPUT);
   digitalWrite(AirPump, LOW);
   digitalWrite(PMT, LOW);
   digitalWrite(LED, LOW);
-
-  
   initialiseValvePins();
 }
 
 
-void loop() {
+void loop(){
+
+
   ui.refresh();
   switch(page){
     case 0:
@@ -106,7 +121,11 @@ void loop() {
 
     case 2:
       displayFunction2();
-      break; 
+      break;
+
+    case 3:
+      displayFunction3();
+      break;
   }
 }
 
@@ -146,9 +165,12 @@ void runFunction(DFRobot_UI::sButton_t &btn){
   }
 
   else if (functionSelect == 3){
-    //run blah blah blah
-
-    ui.drawString(0, 0, "Owie", COLOR_RGB565_PINK , COLOR_RGB565_BLACK, 5, 0);
+    page = 3; //sets the page to displayFunction1();
+    drawnTextFlag = false; //need to reset flags to false to generate new screen.
+    drawnSetupFlag = false;
+    runFlag = true;
+    ui.refresh(); //refreshed ui to displayFunction1(); then runs the function below
+    //function2();
   }
 
   else{
@@ -279,7 +301,7 @@ void displayHome(){
       screen.drawRect(0,0,480,48,COLOR_RGB565_BLACK);
       screen.fillRect(0,0,480,48,COLOR_RGB565_BLACK);
       //Draw / Generate Strings
-      ui.drawString(5, 0, "Load Developer", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
+      ui.drawString(5, 0, "PMT Flourescence Reading", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
       ui.drawString(400,305,"function: 3",COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 1, 0);
       screen.setRotation(0);
       drawnTextFlag = true;
@@ -320,7 +342,7 @@ This part should contain all the text/graphics/buttons that need to be drawn on 
 void displayFunction1(){
   if (drawnSetupFlag == false){
     drawStopButton();
-    drawnSetupFlag = true;
+    drawnSetupFlag = true; 
   }
   //Edit function name / Header / title here
   if (drawnTextFlag == false){ //Checks if text was drawn alr to prevent screen redrawing in loop.
@@ -332,98 +354,308 @@ void displayFunction1(){
     ui.drawString(5, 0, "Run full protocol", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
     ui.drawString(400,305,"function: 1",COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 1, 0);
     screen.setRotation(0);
+    drawnTextFlag = true; 
+  }
+  while(runFlag == true){
+    // f1s1();
+    f1s2();
+    //f1s3();
+    // f1s4();
+    // f1s5();
+    // f1s6();
+    // f1s7();
+    runFlag = false;
+  }
+}
+
+void displayFunction2(){
+  if (drawnSetupFlag == false){
+  //setup for Page w/ stopButton
+    drawStopButton();
+    drawnSetupFlag = true;
+  }
+  //Edit function name / Header / title here
+  if (drawnTextFlag == false){ //Checks if text was drawn alr to prevent screen redrawing in loop.
+    screen.setRotation(3);
+    //Clear Previous Text (don't need to touch)
+    screen.drawRect(0,0,480,48,COLOR_RGB565_BLACK);
+    screen.fillRect(0,0,480,48,COLOR_RGB565_BLACK);
+    //Draw / Generate Strings
+    ui.drawString(5, 0, "Manual Mode", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
+    ui.drawString(400,305,"function: 2",COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 1, 0); //Change Function Number Accordingly
+    screen.setRotation(0);
+
+    //Include Extra Objects and Drawings here (draw one time type)
+    drawValvesForFunc2();
+    drawButtonsForFunc2();
+    drawPumpsForFunc2();
+    drawPumpButtonsForFunc2();
+    drawnTextFlag = true;
+  }
+}
+
+void displayFunction3(){
+  if (drawnSetupFlag == false){
+  //setup for Page w/ stopButton
+    drawStopButton();
+    drawnSetupFlag = true;
+  }
+  //Edit function name / Header / title here
+  if (drawnTextFlag == false){ //Checks if text was drawn alr to prevent screen redrawing in loop.
+    screen.setRotation(3);
+    //Clear Previous Text (don't need to touch)
+    screen.drawRect(0,0,480,48,COLOR_RGB565_BLACK);
+    screen.fillRect(0,0,480,48,COLOR_RGB565_BLACK);
+    //Draw / Generate Strings
+    ui.drawString(5, 0, "PMT Flourescence Reading", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
+    ui.drawString(400,305,"function: 3",COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 1, 0); //Change Function Number Accordingly
+    ui.drawString(135, 60, "PMT status: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(135, 80, "LED status: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(135, 100,"PMT Reading: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    screen.setRotation(0);
+
+    //Include Extra Objects and Drawings here (draw one time type)
+    DFRobot_UI::sButton_t & btnPMT = ui.creatButton();
+    btnPMT.bgColor = COLOR_RGB565_BLUE;
+    btnPMT.setCallback(togglePMT);
+    ui.draw(&btnPMT,/**x=*/160,/**y=*/200,/*width*/60,/*height*/60);
+    
+    DFRobot_UI::sButton_t & btnLED = ui.creatButton();
+    btnLED.bgColor = COLOR_RGB565_PURPLE;
+    btnLED.setCallback(toggleLED);
+    ui.draw(&btnLED,/**x=*/160,/**y=*/120,/*width*/60,/*height*/60);
     drawnTextFlag = true;
   }
 
-  while(runFlag == true){
-    
-    //step 1
-    stop(1);
-    stop(2);
+  if (pmtToggle == true){
     screen.setRotation(3);
-    ui.drawString(135,60,"Loading Water To Impinger", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
-    valve(1,1);
-    valve(5,1);
-    run(1,600,100,true);// adds 20ml to impinger (needs calibration)
-    delay(500);
-    valve(1,0);
-    valve(2,1);
-    run(2,600,25,false); //push leftover water from tube using air into the impinger
-    delay(500);
-    offAllValves();
-    ui.drawString(135,60,"Loading Water To Impinger", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+    pmtReading = analogRead(A5);
+    dtostrf(pmtReading, 3, 0, pmtReadingArr);
+    ui.drawString(300, 100, pmtReadingArr, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(265, 60, " ON  ", COLOR_RGB565_WHITE, COLOR_RGB565_GREEN, 2, false);
     screen.setRotation(0);
-
-    //step 2    
-    //2 hour timer
+  }
+  else if (pmtToggle == false){
     screen.setRotation(3);
-    ui.drawString(135,60,"Air Sampling", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
-    digitalWrite(AirPump, HIGH);
-    delay(100); 
-    for (float timer = 0; timer < 20; timer ++) { //og value for timer i 7200
-    //maybe put the progress bar?
-      // String printPercent = String ((timer * 100.0) / 7200.0);
-      // printPercent.concat("%");
-      // tft.println(printPercent);
-      // delay(1000);      
-    }
-    digitalWrite(AirPump, LOW);
-    ui.drawString(135,60,"Air Sampling", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(300, 100, "NIL", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(265, 60, " OFF ", COLOR_RGB565_WHITE, COLOR_RGB565_RED, 2, false);
     screen.setRotation(0);
+  }
 
-    //step 3
+  if (ledToggle == true){
     screen.setRotation(3);
-    ui.drawString(135,60,"Sample Transfer", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
-    valve(5,1);//impinger
-    valve(3,1);//waste
-    run(1,200,50,false); // remove 10ml from waste. (needs calibration)
-    valve(3,0);//waste
-    valve(4,1);//reactor
-    run(1,150,7,false); // push remaining 1ml into reactor (needs calibration)
-    valve(4,0);//reactor    
-    valve(3,1);//waste
-    run(1,600,100,false); //remove excess water from impinger to waste
-    offAllValves();
-    ui.drawString(135,60,"Sample Transfer", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(265, 80, " ON  ", COLOR_RGB565_WHITE, COLOR_RGB565_GREEN, 2, false);
     screen.setRotation(0);
-
-  //step 4
+  }
+  else if (ledToggle == false){
     screen.setRotation(3);
-    ui.drawString(135,60,"Substrate Loading", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
-    valve(6,1); //substrate
-    valve(10,1); //reactor
-    run(2,200,3,false); //loads sub into tubing to load into reactor after
-    valve(6,0);
-    valve(7,1); // Air
-    run(2,200,10,false);
-    offAllValves();
-    valve(11,1);// Air
-    valve(6,1); // substrate
-    run(2,600,10,true); //uses air to move substrate in tubing back to the substrate tube
-    offAllValves();
-    ui.drawString(135,60,"Substrate Loading", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(265, 80, " OFF ", COLOR_RGB565_WHITE, COLOR_RGB565_RED, 2, false);
     screen.setRotation(0);
+  }
+}
 
-  //step 5
-    //incubation
 
+/*
+   ____            _                    ______                _   _                 
+ |  __ \          | |                  |  ____|              | | (_)                
+ | |  | | ___  ___| | __ _ _ __ ___    | |__ _   _ _ __   ___| |_ _  ___  _ __  ___ 
+ | |  | |/ _ \/ __| |/ _` | '__/ _ \   |  __| | | | '_ \ / __| __| |/ _ \| '_ \/ __|
+ | |__| |  __/ (__| | (_| | | |  __/   | |  | |_| | | | | (__| |_| | (_) | | | \__ \
+ |_____/ \___|\___|_|\__,_|_|  \___|   |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
+                                                                                          
+Declare Functions                       
+This part should contain all the functions that should run when the run button is pressed on a selected page.
+
+*/                                              
+void f1s1(){
+//step 1
+  stop(1);
+  stop(2);
+  screen.setRotation(3);
+  ui.drawString(135,60,"Loading Water To Impinger", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  valve(1,1);
+  valve(5,1);
+  delay(200);
+  run(1,600,100,true);// adds 20ml to impinger (needs calibration)
+  valve(1,0);
+  valve(2,1);
+  delay(200);
+  run(1,600,25,true); //push leftover water from tube using air into the impinger
+  offAllValves();
+  ui.drawString(135,60,"Loading Water To Impinger", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  screen.setRotation(0);
+}
+
+void f1s2(){
+//step 2    
+  //2 hour timer
+  uint32_t millisSinceStart = 0;
+  uint8_t timeRemainingMinutes = 0;
+  uint16_t timeRemainingSeconds = 0;
+  unsigned long startMillis = 0;
+  unsigned long updatedMillis = 0;
+  float progressPercentage = 0;
+  char timeRemainingMinutesArr[3] = {};
+  char timeRemainingSecondsArr[7] = {};
+  static char percentageArray[8] = {};
+
+  screen.setRotation(3);
+  ui.drawString(135,60,"Air Sampling", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  digitalWrite(AirPump, HIGH);
+  delay(200);
+  ui.drawString(135,100,"Time remaining: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,120,"Progress: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(325,120,"%", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  updatedMillis = millis();
+  for (startMillis = millis(); updatedMillis < (startMillis + airSamplingTime); updatedMillis = millis()){
+    millisSinceStart = updatedMillis - startMillis;
+    progressPercentage = ((float)(updatedMillis - startMillis) / (airSamplingTime/100));
+    timeRemainingMinutes = floor((airSamplingTime - millisSinceStart) / 60000);
+    timeRemainingSeconds = floor(((airSamplingTime - millisSinceStart) % 60000)/1000);
+    dtostrf(timeRemainingMinutes, 2, 0, timeRemainingMinutesArr);
+    dtostrf(timeRemainingSeconds, -6, 0, timeRemainingSecondsArr);
+    ui.drawString(320, 100, timeRemainingMinutesArr, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(355, 100, ":", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(365, 100, timeRemainingSecondsArr, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    dtostrf(progressPercentage, 7, 3, percentageArray);
+    ui.drawString(235, 120, percentageArray, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    Serial.println(timeRemainingSeconds);
+    ui.refresh();
+    delay(200);
+  }
+  digitalWrite(AirPump, LOW);
+  ui.drawString(135,60,"Air Sampling", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  screen.setRotation(0);
+}
+
+void f1s3(){
+  //step 3
+  screen.setRotation(3);
+  ui.drawString(135,60,"Sample Transfer", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  valve(5,1);//impinger
+  valve(3,1);//waste
+  ui.drawString(135,120,"10ml to from impinger to waste", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,140,"to waste", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(1,400,50,false); // remove 10ml from impinger to waste. (needs calibration)
+  ui.drawString(135,120,"10ml to from impinger to waste", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,140,"to waste", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  valve(3,0);//waste
+  valve(4,1);//reactor
+  delay(200);
+  ui.drawString(135,120,"1ml from impinger", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,140,"to reactor", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(1,150,4.5,false); // push remaining 1ml into reactor (needs calibration)
+  ui.drawString(135,120,"1ml from impinger", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,140,"to reactor", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  valve(4,0);//reactor    
+  valve(3,1);//waste
+  delay(200);
+  ui.drawString(135,120,"Empties impinger", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(1,600,100,false); //remove excess water from impinger to waste
+  ui.drawString(135,120,"Empties impinger", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  offAllValves();
+  ui.drawString(135,60,"Sample Transfer", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  screen.setRotation(0);
+}
+
+void f1s4(){
+//step 4
+  screen.setRotation(3);
+  ui.drawString(135,60,"Substrate Loading", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  valve(9,1); //substrate
+  valve(10,1); //reactor
+  delay(200);
+  ui.drawString(135,120,"load substrate into tubing", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(2,200,1.7,false); //loads sub into tubing to load into reactor after
+  ui.drawString(135,120,"load substrate into tubing", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  valve(9,0);
+  valve(7,1); // Air
+  delay(200);
+  ui.drawString(135,120,"Air to push sub into reactor", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(2,200,10,false);
+  ui.drawString(135,120,"Air to push sub into reactor", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  offAllValves();
+  valve(11,1);// Air
+  valve(9,1); // substrate
+  delay(200);
+  ui.drawString(135,120,"Air to push sub back into reservoir", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(2,600,10,true); //uses air to move substrate in tubing back to the substrate tube
+  ui.drawString(135,120,"Air to push sub back into reservoir", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  offAllValves();
+  ui.drawString(135,60,"Substrate Loading", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  screen.setRotation(0);
+}
+
+void f1s5(){
+  //Incubation
+  uint32_t millisSinceStart = 0;
+  uint8_t timeRemainingMinutes = 0;
+  uint16_t timeRemainingSeconds = 0;
+  unsigned long startMillis = 0;
+  unsigned long updatedMillis = 0;
+  float progressPercentage = 0;
+  char timeRemainingMinutesArr[3] = {};
+  char timeRemainingSecondsArr[7] = {};
+  static char percentageArray[8] = {};
+
+  screen.setRotation(3);
+  ui.drawString(135,60,"Incubation", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  delay(200);
+  ui.drawString(135,100,"Time remaining: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,120,"Progress: ", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(325,120,"%", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+  updatedMillis = millis();
+  for (startMillis = millis(); updatedMillis < (startMillis + incubationTime); updatedMillis = millis()){
+    millisSinceStart = updatedMillis - startMillis;
+    progressPercentage = ((float)(updatedMillis - startMillis) / (incubationTime/100));
+    timeRemainingMinutes = floor((incubationTime - millisSinceStart) / 60000);
+    timeRemainingSeconds = floor(((incubationTime - millisSinceStart) % 60000)/1000);
+    dtostrf(timeRemainingMinutes, 2, 0, timeRemainingMinutesArr);
+    dtostrf(timeRemainingSeconds, -6, 0, timeRemainingSecondsArr);
+    ui.drawString(320, 100, timeRemainingMinutesArr, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(350, 100, ":", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    ui.drawString(365, 100, timeRemainingSecondsArr, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    dtostrf(progressPercentage, 7, 3, percentageArray);
+    ui.drawString(235, 120, percentageArray, COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
+    Serial.println(timeRemainingSeconds);
+    ui.refresh();
+    delay(200);
+  }
+  ui.drawString(135,60,"Incubation", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  screen.setRotation(0);
+}
+
+void f1s6(){
   //step 6
   screen.setRotation(3);
   ui.drawString(135,60,"Developer Loading", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
   valve(8,1); //developer
   valve(10,1); // reactor
-  run(2,200,4.5,false); //loads developer into tubing (needs calibration)
+  delay(200);
+  ui.drawString(135,120,"load developer into tubing", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  run(2,200,2.6,false); //loads developer into tubing (needs calibration)
+  ui.drawString(135,120,"load developer into tubing", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
   valve(8,0); //developer
   valve(7,1); // air
+  delay(200);
+  ui.drawString(135,120,"Air to push developer into reactor", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
   run(2,200,10,false);
+  ui.drawString(135,120,"Air to push developer into reactor", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
   offAllValves();
   valve(11,1);//air
   valve(8,1); // developer
+  delay(200);
+  ui.drawString(135,120,"Air to push developer", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,120,"back into reservoir", COLOR_RGB565_YELLOW, COLOR_RGB565_BLACK, 2, false);
   run(2,600,10,true); // push developer back into reservoir with air
+  ui.drawString(135,120,"Air to push developer", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
+  ui.drawString(135,120,"back into reservoir", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
   offAllValves();
   ui.drawString(135,60,"Developer Loading", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
   screen.setRotation(0);
+}
 
+void f1s7(){
   //step 7
   screen.setRotation(3);
   ui.drawString(135,60,"Signal Reading", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
@@ -432,6 +664,7 @@ void displayFunction1(){
 
   digitalWrite(PMT, HIGH);
   digitalWrite(LED, HIGH);
+
 
   // for (int x = 0; x < 25; x++)
   // {
@@ -457,8 +690,10 @@ void displayFunction1(){
   digitalWrite(LED, LOW);
   ui.drawString(135,60,"Signal Reading", COLOR_RGB565_BLACK, COLOR_RGB565_BLACK, 2, false);
   screen.setRotation(0);
+}
 
-  //step 8
+void f1s8(){
+//step 8
   screen.setRotation(3);
   ui.drawString(135,60,"Washing", COLOR_RGB565_WHITE, COLOR_RGB565_BLACK, 2, false);
   offAllValves();
@@ -484,72 +719,10 @@ void displayFunction1(){
   valve(9,1); // waste
   run(2,600,50,true);
   offAllValves();
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-    
-    runFlag = false;
-
-  }
 }
 
-void displayFunction2(){
-  if (drawnSetupFlag == false){
-  //setup for Page w/ stopButton
-    drawStopButton();
-    drawnSetupFlag = true;
-  }
-  //Edit function name / Header / title here
-  if (drawnTextFlag == false){ //Checks if text was drawn alr to prevent screen redrawing in loop.
-      screen.setRotation(3);
-      //Clear Previous Text (don't need to touch)
-      screen.drawRect(0,0,480,48,COLOR_RGB565_BLACK);
-      screen.fillRect(0,0,480,48,COLOR_RGB565_BLACK);
-      //Draw / Generate Strings
-      ui.drawString(5, 0, "Manual Mode", COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 3, 0);
-      ui.drawString(400,305,"function: 2",COLOR_RGB565_WHITE , COLOR_RGB565_BLACK, 1, 0); //Change Function Number Accordingly
-      screen.setRotation(0);
-
-    //Include Extra Objects and Drawings here (draw one time type)
-    drawValvesForFunc2();
-    drawButtonsForFunc2();
-    drawPumpsForFunc2();
-    drawPumpButtonsForFunc2();
-    drawnTextFlag = true;
-  }
-  //check if 
-
-}
-
-/*
-   ____            _                    ______                _   _                 
- |  __ \          | |                  |  ____|              | | (_)                
- | |  | | ___  ___| | __ _ _ __ ___    | |__ _   _ _ __   ___| |_ _  ___  _ __  ___ 
- | |  | |/ _ \/ __| |/ _` | '__/ _ \   |  __| | | | '_ \ / __| __| |/ _ \| '_ \/ __|
- | |__| |  __/ (__| | (_| | | |  __/   | |  | |_| | | | | (__| |_| | (_) | | | \__ \
- |_____/ \___|\___|_|\__,_|_|  \___|   |_|   \__,_|_| |_|\___|\__|_|\___/|_| |_|___/
-                                                                                          
-Declare Functions                       
-This part should contain all the functions that should run when the run button is pressed on a selected page.
-
-*/                                              
 
 
-
-void function1(){
-  //blah blah blah
-}
 /*
 
 
@@ -564,22 +737,49 @@ void function1(){
 
 Functions that are very similar to each other
 */
+void togglePMT(){
+  if (pmtToggle == false){
+    digitalWrite(PMT,HIGH);
+    pmtToggle = true;
+    }
+
+  else{
+    digitalWrite(PMT,LOW);
+    pmtToggle = false;
+    }
+}
+
+void toggleLED(){
+  if (ledToggle == false){
+    digitalWrite(LED,HIGH);
+    ledToggle = true;
+    }
+
+  else{
+    digitalWrite(LED,LOW);
+    ledToggle = false;
+    }
+}
+
+
 
 void valve(uint8_t valveNumber, bool state){
-  int valveNumberArr[11] = {40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30};
+  int valveNumberArr[11] = {41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31};
   digitalWriteState = !state;
   digitalWrite(valveNumberArr[(valveNumber-1)], digitalWriteState);
 }
 
 void offAllValves(){
-  int valveNumberArr[11] = {40, 39, 38, 37, 36, 35, 34, 33, 32, 31, 30};
+  int valveNumberArr[11] = {41, 40, 39, 38, 37, 36, 35, 34, 33, 32, 31};
   for (uint8_t i=0; i<12; i++){
     digitalWrite(valveNumberArr[i],HIGH);
   }
 }
 
 void stopAllPumps(){
+ delay(200);
  stop(1);
+ delay(200);
  stop(2);
 }
 
